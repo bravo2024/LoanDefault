@@ -8,15 +8,18 @@ def make_synthetic(n=2000, seed=42):
     fico = rng.integers(500, 800, n)
     rate = rng.uniform(3, 12, n)
     balance = rng.lognormal(10, 1, n)
-    # Default hazard
-    h_def = np.exp(-8 + 0.02 * ltv - 0.03 * fico + 0.1 * rate + 0.1 * np.log(balance)) / 365
-    # Prepay hazard
-    h_pre = np.exp(-6 - 0.01 * ltv + 0.01 * fico - 0.05 * rate + 0.05 * np.log(balance)) / 365
-    t_def = rng.exponential(1 / h_def).clip(30, 365 * 30)
-    t_pre = rng.exponential(1 / h_pre).clip(30, 365 * 30)
-    event = np.where(rng.random(n) < 0.5, 0, np.where(t_def < t_pre, 1, 2))
-    obs = np.where(event == 0, np.minimum(t_def, t_pre),
-                   np.where(event == 1, t_def, t_pre))
+    # Cause-specific hazards, centered so both causes actually occur:
+    # high LTV / low FICO / high rate push default; the reverse pushes prepay.
+    h_def = np.exp(-1.5 + 0.03 * (ltv - 80) - 0.01 * (fico - 650)
+                   + 0.15 * (rate - 6) + 0.2 * (np.log(balance) - 10)) / 365
+    h_pre = np.exp(-1.0 - 0.01 * (ltv - 80) + 0.005 * (fico - 650)
+                   - 0.10 * (rate - 6)) / 365
+    t_def = rng.exponential(1 / h_def)
+    t_pre = rng.exponential(1 / h_pre)
+    censor = rng.uniform(180, 365 * 10, n)  # observation window per loan
+    obs = np.minimum(np.minimum(t_def, t_pre), censor).clip(30)
+    event = np.where(censor <= np.minimum(t_def, t_pre), 0,
+                     np.where(t_def < t_pre, 1, 2))
     df = pd.DataFrame({
         "ltv": ltv, "fico": fico, "rate": rate, "balance": balance,
         "time": obs, "event": event,

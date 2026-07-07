@@ -1,8 +1,20 @@
 # LoanDefault
 
-Credit risk scoring in the Basel III mold: a scorecard builder plus portfolio analytics.
+Loan modeling as a **competing-risks** problem: a mortgage leaves the book either by defaulting (a credit loss) or by prepaying (a lost income stream), and a model that lumps both into "bad" misprices each.
 
-Trains four classifiers on synthetic Lending Club-style loan data to predict default. Dashboard provides a full credit risk workflow: data exploration, multi-model comparison, Weight-of-Evidence scorecard construction, portfolio risk aggregation, and business impact simulation.
+A Cox proportional-hazards model is fit on the *default* cause while prepayment competes for the same loans (cause-specific hazards; cumulative incidence in the spirit of Fine & Gray 1999). The optimizer is plain `scipy.optimize` on the Cox partial likelihood — no survival library.
+
+## Data
+
+Simulated loan portfolio (LTV, FICO, note rate, balance) with cause-specific hazards, because loan-level performance data with timing of defaults *and* prepayments sits behind registration walls (Freddie Mac / Fannie Mae loan-level datasets — free but gated). The generator's coefficients are the ground truth the model should recover, which is the point of the exercise:
+
+| Covariate | True effect | Recovered HR |
+|---|---|---|
+| LTV (per point) | e^0.03 ≈ 1.030 | 1.032 |
+| FICO (per point) | e^−0.01 ≈ 0.990 | 0.990 |
+| Rate (per point) | e^0.15 ≈ 1.162 | 1.185 |
+
+Held-out concordance index **0.76** on the default cause (264 default events in the test fold). Numbers regenerate with `python train.py`.
 
 ## Run it
 
@@ -13,45 +25,22 @@ pytest -q
 streamlit run app.py
 ```
 
+## Dashboard
+
+| Tab | What it shows |
+|---|---|
+| **Portfolio** | Loan table, outcome split (active / default / prepaid) |
+| **Hazard Model** | Default-cause hazard ratios, held-out C-index |
+| **Cumulative Incidence** | Per-cause incidence curves over a configurable horizon |
+
 ## Layout
 
 ```
-LoanDefault/
-  src/         data, model, evaluate, persist, visualizations modules
-  train.py     training pipeline (multi-model + CV)
-  app.py       Streamlit dashboard
-  tests/       pytest smoke test
-  models/      saved model + metrics (gitignored)
+src/         generator with cause-specific hazards, Cox PH fit, CIF + C-index
+train.py     training pipeline
+app.py       Streamlit dashboard
+tests/       smoke tests
+models/      saved model + metrics (gitignored)
 ```
 
-## Results
-
-Best model (Logistic Regression) holdout results:
-
-| Metric | Value |
-|---|---|
-| ROC AUC | 0.916 |
-| Gini | 0.831 |
-| KS Statistic | 0.729 |
-| F1 Score | 0.783 |
-| Accuracy | 0.840 |
-
-5-fold CV AUC: 0.923 ± 0.028. Four models compared.
-
-### Dashboard tabs
-
-| Tab | What it does |
-|---|---|
-| **Data Explorer** | Dataset overview, class balance, numerical feature distributions, feature correlations |
-| **Model Lab** | Multi-model comparison, ROC/PR curves, KS curve, calibration, confusion matrix, CV results, permutation importance |
-| **Scorecard Builder** | WOE transformation, scorecard points assignment, PD calibration, threshold sweep analysis |
-| **Portfolio Risk** | Risk grade distribution, concentration analysis, expected loss calculation |
-| **Business Impact** | Approval rate vs default rate trade-off, profit optimisation, regulatory capital impact |
-
-## Data
-
-Synthetic Lending Club-style loan dataset: loan amount, interest rate, term, grade, employment length, annual income, DTI ratio, credit history length, and default status.
-
-## License
-
-MIT
+MIT licensed.
